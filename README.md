@@ -26,7 +26,7 @@ This repo is also a companion to [my blog](https://codebeats.net/).
 
 ## Usage
 
-1. Run the data capture script **tilt.py** to connect and log SG and temperature readings from the TILT Hydrometer.
+1. Run the flask server **tilt_dashboard.py** to connect and log SG and temperature readings from the TILT Hydrometer.
 2. Use the analysis script **Hydrometer Regression.ipynb** to plot and analyze the logged data.
 
 ## License
