@@ -28,6 +28,8 @@ import threading
 import binascii
 from datetime import datetime
 import struct
+from collections import deque
+import threading, time
 
 # PyObjC / Objective-C Imports
 from Foundation import *
@@ -38,6 +40,22 @@ import objc
 #   Key:   peripheral.identifier() (unique ID for each BLE device)
 #   Value: dict with color, temperature, gravity, raw data, last_seen
 discovered_devices = {}
+
+# after discovered_devices = {}
+history = {}  # pid -> deque([{'ts', 'temp_c', 'gravity', 'rssi'}])
+_history_lock = threading.Lock()
+
+def _append_history(pid, temp_c, gravity):
+    with _history_lock:
+        dq = history.get(pid)
+        if dq is None:
+            dq = deque(maxlen=3600)  # ~2 hours at 2s cadence
+            history[pid] = dq
+        dq.append({
+            'ts': int(time.time() * 1000),
+            'temp_c': temp_c,
+            'gravity': gravity
+        })
 
 def clear_terminal():
     """
@@ -239,6 +257,9 @@ class CentralManagerDelegate(NSObject):
                 "raw_hex":     data_bytes.hex(),
                 "last_seen":   datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             }
+            _append_history(pid,
+                    tilt_info.get("temperature_c"),
+                    tilt_info["gravity"])
 
 
 def main():
@@ -290,6 +311,6 @@ def start_ble_scanner():
         q = None  # falls back to main queue; only works if you run an NSRunLoop
 
     _manager = CBCentralManager.alloc().initWithDelegate_queue_options_(_delegate, q, None)
-    
+
 if __name__ == "__main__":
     main()
