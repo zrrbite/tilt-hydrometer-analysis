@@ -262,6 +262,34 @@ def main():
     except KeyboardInterrupt:
         print("\nStopped.")
 
+# tilt.py (add near the bottom)
+from CoreBluetooth import CBCentralManager
+import threading
 
+_delegate = None
+_manager = None
+_ble_started = False
+
+def start_ble_scanner():
+    """
+    Start CoreBluetooth scanning on a background dispatch queue so it
+    coexists with Flask. Safe to call more than once.
+    """
+    global _delegate, _manager, _ble_started
+    if _ble_started:
+        return
+    _ble_started = True
+
+    _delegate = CentralManagerDelegate.alloc().init()
+
+    # Use libdispatch queue so we don't need NSRunLoop
+    try:
+        import dispatch  # pip install pyobjc-framework-libdispatch
+        q = dispatch.dispatch_queue_create(b"tilt.scanner", None)
+    except Exception:
+        q = None  # falls back to main queue; only works if you run an NSRunLoop
+
+    _manager = CBCentralManager.alloc().initWithDelegate_queue_options_(_delegate, q, None)
+    
 if __name__ == "__main__":
     main()
