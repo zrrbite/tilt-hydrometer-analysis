@@ -163,7 +163,6 @@ def parse_tilt_advertisement(data_bytes):
     if tx_raw == 0xC5:
         battery_weeks = None
 
-
     return {
         "color":       color,
         "temperature": temperature,
@@ -216,7 +215,17 @@ class CentralManagerDelegate(NSObject):
         data_bytes = bytes(manufacturer_data)
         tilt_info  = parse_tilt_advertisement(data_bytes)
 
-        # If it's recognized as a Tilt hydrometer, update our global dictionary
+   #     if tilt_info:
+   #         # Raw battery/Tx debug print (safe: only for Tilts)
+   #         tx_raw = data_bytes[24] if len(data_bytes) >= 25 else None
+   #         tx_dbm = struct.unpack('b', bytes([tx_raw]))[0] if tx_raw is not None else None
+   #         batt   = tilt_info.get("battery_weeks")
+   #         print(f"[BAT] {tilt_info['color']} {peripheral.identifier()}: "
+   #             f"tx_raw={f'0x{tx_raw:02X}' if tx_raw is not None else '??'} "
+   #             f"unsigned={tx_raw if tx_raw is not None else '??'} "
+   #             f"signed={tx_dbm if tx_dbm is not None else '??'} "
+   #             f"weeks={'N/A' if batt is None else batt}")
+
         if tilt_info:
             pid = peripheral.identifier()
             discovered_devices[pid] = {
