@@ -244,6 +244,14 @@ class CentralManagerDelegate(NSObject):
    #             f"signed={tx_dbm if tx_dbm is not None else '??'} "
    #             f"weeks={'N/A' if batt is None else batt}")
 
+# Convert NSNumber -> int; 127 means "not available" on iOS/macOS
+        try:
+            rssi_dbm = int(RSSI)  # PyObjC will coerce NSNumber
+        except Exception:
+            rssi_dbm = None
+        if rssi_dbm == 127:
+            rssi_dbm = None
+
         if tilt_info:
             pid = peripheral.identifier()
             discovered_devices[pid] = {
@@ -251,6 +259,7 @@ class CentralManagerDelegate(NSObject):
                 "temperature": tilt_info["temperature"],
                 "temperature_c": tilt_info.get("temperature_c"),                
                 "gravity":     tilt_info["gravity"],
+                "rssi":          rssi_dbm,
                 "battery_weeks": tilt_info.get("battery_weeks"),
                 "tx_raw": tilt_info.get("tx_raw"),
                 "tx_dbm": tilt_info.get("tx_dbm"),
