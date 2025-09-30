@@ -27,7 +27,7 @@ TEMPLATE = """
 <html lang='en'>
 <head>
   <meta charset='UTF-8'>
-  <title>Tilt Hydrometer Dashboard</title>
+  <title>Tilt Dashboard</title>
   <style>
     body { background: #fff; color: #111; font-family: Helvetica, Arial, sans-serif; }
     .tilt-card {
@@ -41,13 +41,25 @@ TEMPLATE = """
     .dot { width: 10px; height: 10px; border-radius: 50%; display:inline-block; border: 1px solid rgba(0,0,0,0.25); }
     .chip { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 0.82em; font-weight: 700; }
     .chip-rssi  { background: #e9f3ff; color: #0a84ff; border: 1px solid #d5e8ff; }
-
+    .hx-temp { color: #ff3b30; font-weight: 800; text-decoration: underline; }
+    .hx-grav { color: #0a84ff; font-weight: 800; text-decoration: underline; }
     .stats { display: grid; gap: 12px; }
     .stat { background: #f7f7f9; border: 1px solid #eee; border-radius: 14px; padding: 14px; }
     .stat-label { text-transform: uppercase; font-weight: 700; font-size: 0.85em; letter-spacing: 0.06em; color: #666; margin-bottom: 6px; }
     .stat-value { font-weight: 900; font-size: clamp(2.2rem, 6vw, 4rem); line-height: 1; letter-spacing: -0.02em; }
     .stat-temp  { color: #ff3b30; }
     .stat-grav  { color: #0a84ff; }
+    .raw-block {
+        margin-top: 14px;
+        padding: 10px 12px;
+        border: 1px solid #eee;
+        border-radius: 10px;
+        background: #f7f7f9;
+        font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+        white-space: pre-wrap;     /* wrap long lines */
+        word-break: break-all;     /* break at any char */
+        color: #333;
+    }    
   </style>
 </head>
 <body>
@@ -58,7 +70,6 @@ TEMPLATE = """
   <div class="tilt-sub">
     <span class="dot" style="background: {{ colors[info['color']] }};" title="{{ info['color'] }}"></span>
     <span class="chip chip-rssi">RSSI: <span id="rssi-{{ pid }}">{{ info.get('rssi', 'N/A') }}</span></span>
-    <span>Raw: <span id="raw-{{ pid }}">{{ info['raw_hex'][:12] }}…</span></span>
   </div>
 
   <div class="stats">
@@ -66,39 +77,60 @@ TEMPLATE = """
       <div class="stat-label">Temperature</div>
       <div class="stat-value stat-temp"><span id="temp-{{ pid }}">{{ info['temperature_c']|float|round(2) }}</span> C</div>
     </div>
-
     <div class="stat">
       <div class="stat-label">Gravity</div>
       <div class="stat-value stat-grav"><span id="grav-{{ pid }}">{{ info['gravity']|float|round(3) }}</span></div>
     </div>
   </div>
+
+  <!-- Full packet at end of card -->
+  <div class="raw-block" id="rawfull-{{ pid }}">{{ info['raw_hex'] }}</div>
 </div>
   {% else %}
     <div style='text-align:center; margin-top:40px;'>No Tilt devices found.</div>
   {% endfor %}
 
-  <script>
-    async function refreshStats() {
-      try {
-        const res = await fetch('/api/devices', { cache: 'no-store' });
-        const devices = await res.json();
-        for (const [pid, info] of Object.entries(devices)) {
-          const t = document.getElementById('temp-' + pid);
-          const g = document.getElementById('grav-' + pid);
-          const r = document.getElementById('rssi-' + pid);
-          const rw = document.getElementById('raw-' + pid);
-          if (t && info.temperature_c != null) t.textContent = Number(info.temperature_c).toFixed(2);
-          if (g && info.gravity != null)      g.textContent = Number(info.gravity).toFixed(3);
-          if (r && info.rssi != null)         r.textContent = info.rssi;
-          if (rw && info.raw_hex)             rw.textContent = (info.raw_hex || '').slice(0, 12) + '…';
-        }
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    setInterval(refreshStats, 2000);
-    refreshStats();
-  </script>
+<script>
+function highlightIBeacon(hex) {
+  if (!hex) return '';
+  const bytes = hex.replace(/\s+/g, '').toUpperCase().match(/.{1,2}/g) || [];
+
+  // Find iBeacon marker 0x02 0x15
+  let marker = -1;
+  for (let i = 0; i < bytes.length - 1; i++) {
+    if (bytes[i] === '02' && bytes[i+1] === '15') { marker = i; break; }
+  }
+  // If not found, just pretty-print
+  if (marker < 0) return bytes.join(' ');
+
+  // Offsets from marker: [02 15][16B UUID][MAJOR 2B][MINOR 2B][TX 1B]
+  const majorStart = marker + 2 + 16;
+  const minorStart = majorStart + 2;
+
+  return bytes.map((b, idx) => {
+    if (idx === majorStart || idx === majorStart + 1) return `<span class="hx-temp">${b}</span>`;
+    if (idx === minorStart || idx === minorStart + 1) return `<span class="hx-grav">${b}</span>`;
+    return b;
+  }).join(' ');
+}
+
+async function refreshStats() {
+  const res = await fetch('/api/devices', { cache: 'no-store' });
+  const devices = await res.json();
+  for (const [pid, info] of Object.entries(devices)) {
+    const rf = document.getElementById('rawfull-' + pid);
+    if (rf && info.raw_hex) rf.innerHTML = highlightIBeacon(info.raw_hex);
+    const t = document.getElementById('temp-' + pid);
+    const g = document.getElementById('grav-' + pid);
+    const r = document.getElementById('rssi-' + pid);
+    if (t && info.temperature_c != null) t.textContent = Number(info.temperature_c).toFixed(2);
+    if (g && info.gravity != null)      g.textContent = Number(info.gravity).toFixed(3);
+    if (r && info.rssi != null)         r.textContent = info.rssi;
+  }
+}
+  setInterval(refreshStats, 2000);
+  refreshStats();
+</script>
 </body>
 </html>
 """
