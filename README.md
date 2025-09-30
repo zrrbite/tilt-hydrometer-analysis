@@ -16,6 +16,8 @@ This repo is also a companion to [my blog](https://codebeats.net/).
     \[
     SG(t) = FG + (OG - FG) \cdot e^{-k \cdot t}
     \]
+- ** Flask server that presents Tilt cards
+<img width="1020" height="498" alt="image" src="https://github.com/user-attachments/assets/c8fe75e9-2e2e-4f6d-8508-1e8e43185335" />
 
 ## Requirements
 
