@@ -28,35 +28,76 @@ TEMPLATE = """
 <head>
   <meta charset='UTF-8'>
   <title>Tilt Hydrometer Dashboard</title>
-  <style>
-    body { background: #222; color: #fff; font-family: Helvetica, Arial, sans-serif; }
-    .tilt-card {
-      margin: 20px auto; padding: 30px; border-radius: 20px;
-      width: 90%; max-width: 900px; text-align: center;
-      box-shadow: 0 4px 24px rgba(0,0,0,0.2);
-    }
-    .tilt-title { font-size: 2.2em; font-weight: bold; margin-bottom: 10px; }
-    .tilt-values { font-size: 1.4em; margin-bottom: 12px; }
-    .chart-wrap { background: rgba(0,0,0,0.2); padding: 12px; border-radius: 12px; }
-    canvas { width: 100%; height: 260px; }
-  </style>
+<style>
+  body { background: #fff; color: #111; font-family: Helvetica, Arial, sans-serif; }
+  .tilt-card {
+    margin: 20px auto; padding: 28px; border-radius: 20px;
+    width: 90%; max-width: 900px; text-align: center;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+    background: #fff;
+    border: 1px solid #e6e6e6;
+  }
+  .tilt-title { font-size: 2.2em; font-weight: 800; margin-bottom: 6px; letter-spacing: -0.02em; }
+  .tilt-sub { color: #666; font-size: 0.95em; margin-bottom: 14px; }
+
+  /* Stats */
+  .stats { display: grid; gap: 12px; }
+  .stat {
+    background: #f7f7f9; border: 1px solid #eee; border-radius: 14px; padding: 14px;
+  }
+  .stat-label { text-transform: uppercase; font-weight: 700; font-size: 0.85em; letter-spacing: 0.06em; color: #666; margin-bottom: 6px; }
+  .stat-value { 
+    font-weight: 900; 
+    font-size: clamp(2.2rem, 6vw, 4rem); 
+    line-height: 1; 
+    letter-spacing: -0.02em;
+    text-shadow: 0 1px 0 rgba(255,255,255,0.6);
+  }
+  .stat-temp  { color: #ff3b30; }   /* Temp accent */
+  .stat-grav  { color: #0a84ff; }   /* Gravity accent */
+
+  /* Small chips under the title */
+  .chip { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 0.82em; font-weight: 700; }
+  .chip-color { background: #111; color: #fff; }
+  .chip-rssi  { background: #e9f3ff; color: #0a84ff; border: 1px solid #d5e8ff; margin-left: 8px; }
+
+  .chart-wrap { background: #fff; padding: 12px; border-radius: 12px; border: 1px solid #eee; margin-top: 10px; }
+  canvas { width: 100%; height: 260px; }
+</style>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
   <h1 style='text-align:center;'>Tilt Hydrometer Dashboard</h1>
 
   {% for pid, info in devices.items() %}
-    <div class="tilt-card" style="background: {{ colors[info['color']] }}; color: #fff;">
-      <div class="tilt-title">{{ info['color'] }}</div>
-      <div class="tilt-values">
-        Temp: {{ info['temperature_c']|float|round(2) }} °C
-        &nbsp; | &nbsp; Gravity: {{ info['gravity']|float|round(3) }}
-        &nbsp; | &nbsp; RSSI: {{ info.get('rssi', 'N/A') }}
-      </div>
-      <div class="chart-wrap">
-        <canvas id="chart-{{ pid }}"></canvas>
+<div class="tilt-card">
+  <div class="tilt-title">{{ info['color'] }}</div>
+  <div class="tilt-sub">
+    <span class="chip chip-color">{{ info['color'] }}</span>
+    <span class="chip chip-rssi">RSSI: {{ info.get('rssi', 'N/A') }}</span>
+    &nbsp; Raw: {{ info['raw_hex'][:12] }}…
+  </div>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-label">Temperature</div>
+      <div class="stat-value stat-temp">
+        {{ info['temperature_c']|float|round(2) }} °C
       </div>
     </div>
+
+    <div class="stat">
+      <div class="stat-label">Gravity</div>
+      <div class="stat-value stat-grav">
+        {{ info['gravity']|float|round(3) }}
+      </div>
+    </div>
+  </div>
+
+  <div class="chart-wrap">
+    <canvas id="chart-{{ pid }}"></canvas>
+  </div>
+</div>
   {% else %}
     <div style='text-align:center; margin-top:40px;'>No Tilt devices found.</div>
   {% endfor %}
@@ -73,10 +114,10 @@ function ensureChart(pid, colorName) {
     type: 'line',
     data: {
       labels: [],
-      datasets: [
-        { label: 'Temp (°C)', data: [], yAxisID: 'yTemp', borderWidth: 2, pointRadius: 0 },
-        { label: 'Gravity',   data: [], yAxisID: 'yGrav', borderWidth: 2, pointRadius: 0 }
-      ]
+    datasets: [
+        { label: 'Temp (°C)', data: [], yAxisID: 'yTemp', borderWidth: 3, pointRadius: 0, borderColor: '#ff3b30' },
+        { label: 'Gravity',   data: [], yAxisID: 'yGrav', borderWidth: 3, pointRadius: 0, borderColor: '#0a84ff' }
+    ]
     },
     options: {
       responsive: true,
