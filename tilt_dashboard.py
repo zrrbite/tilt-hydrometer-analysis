@@ -54,26 +54,25 @@ TEMPLATE = """
   <h1 style='text-align:center;'>Tilt Hydrometer Dashboard</h1>
 
   {% for pid, info in devices.items() %}
-    <div class="tilt-card">
-      <div class="tilt-title">{{ info['color'] }}</div>
-      <div class="tilt-sub">
-        <span class="dot" style="background: {{ colors[info['color']] }};"></span>
-        <span class="chip chip-rssi">RSSI: <span id="rssi-{{ pid }}">{{ info.get('rssi', 'N/A') }}</span></span>
-        <span>Raw: <span id="raw-{{ pid }}">{{ info['raw_hex'][:12] }}…</span></span>
-      </div>
+<div class="tilt-card">
+  <div class="tilt-sub">
+    <span class="dot" style="background: {{ colors[info['color']] }};" title="{{ info['color'] }}"></span>
+    <span class="chip chip-rssi">RSSI: <span id="rssi-{{ pid }}">{{ info.get('rssi', 'N/A') }}</span></span>
+    <span>Raw: <span id="raw-{{ pid }}">{{ info['raw_hex'][:12] }}…</span></span>
+  </div>
 
-      <div class="stats">
-        <div class="stat">
-          <div class="stat-label">Temperature</div>
-          <div class="stat-value stat-temp"><span id="temp-{{ pid }}">{{ info['temperature_c']|float|round(2) }}</span> C</div>
-        </div>
-
-        <div class="stat">
-          <div class="stat-label">Gravity</div>
-          <div class="stat-value stat-grav"><span id="grav-{{ pid }}">{{ info['gravity']|float|round(3) }}</span></div>
-        </div>
-      </div>
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-label">Temperature</div>
+      <div class="stat-value stat-temp"><span id="temp-{{ pid }}">{{ info['temperature_c']|float|round(2) }}</span> C</div>
     </div>
+
+    <div class="stat">
+      <div class="stat-label">Gravity</div>
+      <div class="stat-value stat-grav"><span id="grav-{{ pid }}">{{ info['gravity']|float|round(3) }}</span></div>
+    </div>
+  </div>
+</div>
   {% else %}
     <div style='text-align:center; margin-top:40px;'>No Tilt devices found.</div>
   {% endfor %}
