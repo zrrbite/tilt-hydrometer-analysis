@@ -26,6 +26,7 @@ TEMPLATE = """
 <!DOCTYPE html>
 <html lang='en'>
 <head>
+  <meta http-equiv="refresh" content="3">
   <meta charset='UTF-8'>
   <title>Tilt Dashboard</title>
   <style>
@@ -36,6 +37,12 @@ TEMPLATE = """
       box-shadow: 0 4px 24px rgba(0,0,0,0.12);
       background: #fff; border: 1px solid #e6e6e6;
     }
+  .stat-abv { color: #34c759; }         /* green accent */
+  .chip-og { background:#f3f6ff; color:#123; border:1px solid #dbe6ff; }
+  .og-input {
+    width: 120px; padding: 4px 8px; margin-left: 6px;
+    border: 1px solid #ccd; border-radius: 8px; font: inherit;
+  }    
     .tilt-title { font-size: 2.2em; font-weight: 800; margin-bottom: 6px; letter-spacing: -0.02em; }
     .tilt-sub { color: #666; font-size: 0.95em; margin-bottom: 14px; display:flex; gap:10px; justify-content:center; align-items:center; flex-wrap:wrap; }
     .dot { width: 10px; height: 10px; border-radius: 50%; display:inline-block; border: 1px solid rgba(0,0,0,0.25); }
@@ -67,21 +74,28 @@ TEMPLATE = """
 
   {% for pid, info in devices.items() %}
 <div class="tilt-card">
-  <div class="tilt-sub">
-    <span class="dot" style="background: {{ colors[info['color']] }};" title="{{ info['color'] }}"></span>
-    <span class="chip chip-rssi">RSSI: <span id="rssi-{{ pid }}">{{ info.get('rssi', 'N/A') }}</span></span>
+<div class="tilt-sub">
+  <span class="dot" style="background: {{ colors[info['color']] }};" title="{{ info['color'] }}"></span>
+  <span class="chip chip-rssi">RSSI: <span id="rssi-{{ pid }}">{{ info.get('rssi', 'N/A') }}</span></span>
+  <span class="chip chip-og">
+    OG:
+    <input id="og-{{ pid }}" class="og-input" type="text" inputmode="decimal" placeholder="1.060 or 1060">
+  </span>
+</div>
+<div class="stats">
+  <div class="stat">
+    <div class="stat-label">Temperature</div>
+    <div class="stat-value stat-temp"><span id="temp-{{ pid }}">{{ "%.2f"|format(info['temperature_c']|float) }}</span> C</div>
   </div>
-
-  <div class="stats">
-    <div class="stat">
-      <div class="stat-label">Temperature</div>
-      <div class="stat-value stat-temp"><span id="temp-{{ pid }}">{{ info['temperature_c']|float|round(2) }}</span> C</div>
-    </div>
-    <div class="stat">
-      <div class="stat-label">Gravity</div>
-      <div class="stat-value stat-grav"><span id="grav-{{ pid }}">{{ info['gravity']|float|round(3) }}</span></div>
-    </div>
+  <div class="stat">
+    <div class="stat-label">Gravity</div>
+    <div class="stat-value stat-grav"><span id="grav-{{ pid }}">{{ "%.3f"|format(info['gravity']|float) }}</span></div>
   </div>
+  <div class="stat">
+    <div class="stat-label">ABV</div>
+    <div class="stat-value stat-abv"><span id="abv-{{ pid }}">--</span> %</div>
+  </div>
+</div>
 
   <!-- Full packet at end of card -->
   <div class="raw-block" id="rawfull-{{ pid }}">{{ info['raw_hex'] }}</div>
@@ -91,43 +105,87 @@ TEMPLATE = """
   {% endfor %}
 
 <script>
-function highlightIBeacon(hex) {
-  if (!hex) return '';
-  const bytes = hex.replace(/\s+/g, '').toUpperCase().match(/.{1,2}/g) || [];
+  // keep a copy of the latest device data so ABV can update instantly on OG edits
+  let lastDevices = {};
+  const attached = new Set();
 
-  // Find iBeacon marker 0x02 0x15
-  let marker = -1;
-  for (let i = 0; i < bytes.length - 1; i++) {
-    if (bytes[i] === '02' && bytes[i+1] === '15') { marker = i; break; }
+  function normalizeOG(ogStr) {
+    const og = parseFloat(ogStr);
+    if (isNaN(og)) return null;
+    // If user typed 1060, treat it as 1.060
+    return og > 2 ? og / 1000.0 : og;
   }
-  // If not found, just pretty-print
-  if (marker < 0) return bytes.join(' ');
 
-  // Offsets from marker: [02 15][16B UUID][MAJOR 2B][MINOR 2B][TX 1B]
-  const majorStart = marker + 2 + 16;
-  const minorStart = majorStart + 2;
-
-  return bytes.map((b, idx) => {
-    if (idx === majorStart || idx === majorStart + 1) return `<span class="hx-temp">${b}</span>`;
-    if (idx === minorStart || idx === minorStart + 1) return `<span class="hx-grav">${b}</span>`;
-    return b;
-  }).join(' ');
-}
-
-async function refreshStats() {
-  const res = await fetch('/api/devices', { cache: 'no-store' });
-  const devices = await res.json();
-  for (const [pid, info] of Object.entries(devices)) {
-    const rf = document.getElementById('rawfull-' + pid);
-    if (rf && info.raw_hex) rf.innerHTML = highlightIBeacon(info.raw_hex);
-    const t = document.getElementById('temp-' + pid);
-    const g = document.getElementById('grav-' + pid);
-    const r = document.getElementById('rssi-' + pid);
-    if (t && info.temperature_c != null) t.textContent = Number(info.temperature_c).toFixed(2);
-    if (g && info.gravity != null)      g.textContent = Number(info.gravity).toFixed(3);
-    if (r && info.rssi != null)         r.textContent = info.rssi;
+  function calcABV(ogStr, sg) {
+    if (sg == null) return null;
+    const og = normalizeOG(ogStr);
+    if (og == null) return null;
+    // Standard formula for SG in 1.xxx units
+    // If you choose to enter OG as 1060, normalizeOG already fixed it.
+    const abv = (og - sg) * 131.25;
+    return Math.max(0, abv);
   }
-}
+
+  function initOGInput(pid) {
+    if (attached.has(pid)) return;
+    attached.add(pid);
+    const inp = document.getElementById('og-' + pid);
+    if (!inp) return;
+    // load saved OG if present
+    const saved = localStorage.getItem('og-' + pid);
+    if (saved) inp.value = saved;
+
+    const update = () => {
+      localStorage.setItem('og-' + pid, inp.value || '');
+      updateABVFor(pid);
+    };
+    inp.addEventListener('input', update);
+    // compute once on init
+    updateABVFor(pid);
+  }
+
+  function updateABVFor(pid) {
+    const info = lastDevices[pid] || {};
+    const ogInput = document.getElementById('og-' + pid);
+    const abvEl   = document.getElementById('abv-' + pid);
+    if (!ogInput || !abvEl) return;
+    const abv = calcABV(ogInput.value, info.gravity);
+    abvEl.textContent = (abv != null && !isNaN(abv)) ? abv.toFixed(2) : '--';
+  }
+
+  // If you’re coloring raw bytes elsewhere, keep that code as-is.
+  async function refreshStats() {
+    try {
+      const res = await fetch('/api/devices', { cache: 'no-store' });
+      const devices = await res.json();
+      lastDevices = devices; // cache
+
+      for (const [pid, info] of Object.entries(devices)) {
+        // ensure OG input exists and is wired
+        initOGInput(pid);
+
+        const t  = document.getElementById('temp-' + pid);
+        const g  = document.getElementById('grav-' + pid);
+        const r  = document.getElementById('rssi-' + pid);
+
+        if (t && info.temperature_c != null) t.textContent = Number(info.temperature_c).toFixed(2);
+        if (g && info.gravity != null)      g.textContent = Number(info.gravity).toFixed(3);
+        if (r && info.rssi != null)         r.textContent = info.rssi;
+
+        // recompute ABV now that we have fresh SG
+        updateABVFor(pid);
+
+        // if you also update the hex packet:
+        const rf = document.getElementById('rawfull-' + pid);
+        if (rf && info.raw_hex && typeof highlightIBeacon === 'function') {
+          rf.innerHTML = highlightIBeacon(info.raw_hex);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
   setInterval(refreshStats, 2000);
   refreshStats();
 </script>
