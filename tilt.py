@@ -270,6 +270,63 @@ class CentralManagerDelegate(NSObject):
                     tilt_info.get("temperature_c"),
                     tilt_info["gravity"])
 
+            # Write a CSV line for each new advertisement (single-tilt case)
+            try:
+                now_dt = datetime.now()
+                append_to_mead_csv(now_dt, tilt_info["gravity"], tilt_info.get("temperature_c", 0.0))
+            except Exception:
+                pass
+
+# --- Add CSV append helper and lock ---
+CSV_PATH = os.path.join(os.path.dirname(__file__), 'mead.csv')
+_csv_lock = threading.Lock()
+
+def ensure_csv_header():
+    """
+    Ensure mead.csv exists and contains the header line.
+    Safe to call repeatedly.
+    """
+    with _csv_lock:
+        if not os.path.exists(CSV_PATH):
+            with open(CSV_PATH, 'w', encoding='utf-8') as f:
+                f.write('Timepoint,SG,Temp (°C)\n')
+
+def append_to_mead_csv(timepoint_dt, gravity, temp_c):
+    """
+    Append a line like:
+      12/31/2024 15:42:49,1.001,22.8
+    timepoint_dt: datetime
+    gravity: float (SG)
+    temp_c: float (°C)
+    """
+    try:
+        ensure_csv_header()
+        line = f"{timepoint_dt.strftime('%m/%d/%Y %H:%M:%S')},{gravity:.3f},{temp_c:.1f}\n"
+        with _csv_lock:
+            # ensure file ends with newline so appended rows don't join the last line
+            need_newline = False
+            try:
+                with open(CSV_PATH, 'rb') as rf:
+                    rf.seek(0, os.SEEK_END)
+                    size = rf.tell()
+                    if size > 0:
+                        rf.seek(size - 1)
+                        last = rf.read(1)
+                        if last != b'\n':
+                            need_newline = True
+            except Exception:
+                # non-fatal - continue to append
+                pass
+
+            with open(CSV_PATH, 'a', encoding='utf-8') as f:
+                if need_newline:
+                    f.write('\n')
+                f.write(line)
+    except Exception as e:
+        # keep scan running even if disk write fails
+        print(f"Failed to append to {CSV_PATH}: {e}")
+
+# --- end CSV helper ---
 
 def main():
     """
