@@ -26,7 +26,11 @@ This repo is also a companion to [my blog](https://codebeats.net/).
 - You can install a venv from VS code when you try to run the jypyter file.
 - From term install the libraries above and restart/rerun
 
-If you want to create a new file.
+If you want to create a new brew log.
+```
+chmod +x new-mead.sh
+./new-mead.sh
+```
 
 ## Usage
 
